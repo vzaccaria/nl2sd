@@ -45,6 +45,12 @@ export function generateTikz(
   lines.push("  copy node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  dummy node/.style={inner sep=0pt, minimum size=0pt, coordinate},");
   lines.push("  io label/.style={font=\\footnotesize},");
+  lines.push("  probe marker/.style={draw=blue!80, line width=0.8pt},");
+  lines.push("  dead node/.style={draw=gray!50, dashed, fill=gray!10, text=gray!50},");
+  lines.push("  dead edge/.style={draw=gray!40, dashed},");
+  lines.push("  dead label/.style={font=\\footnotesize, text=gray!50},");
+  lines.push("  fresh marker/.style={fill=blue!30, draw=blue!70},");
+  lines.push("  highlight marker/.style={fill=yellow!40, draw=orange!60},");
   lines.push("]");
   lines.push("");
 
@@ -64,12 +70,37 @@ export function generateTikz(
       continue;
     }
 
-    const style = nodeStyle(n.type);
+    let style = nodeStyle(n.type);
+    const isDead = hasAnnotation(n, "dead");
+    const isFresh = hasAnnotation(n, "fresh");
+    const isHighlight = hasAnnotation(n, "highlight");
+
     if (n.type === "in" || n.type === "out") {
+      if (isDead) {
+        style = "dead label";
+      } else if (isHighlight) {
+        style = "io label, fill=yellow!40, rounded corners, inner sep=2pt";
+      } else if (isFresh) {
+        style = "io label, text=blue!70";
+      }
       const label = n.comment || n.port || `${n.type}${n.id}`;
       lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {${formatLabel(label)}};`);
     } else {
+      if (isDead) {
+        style = "dead node";
+      } else if (isFresh) {
+        // Keep shape size from base style, override fill/draw
+        const base = nodeStyle(n.type);
+        style = `${base}, fresh marker`;
+      } else if (isHighlight) {
+        const base = nodeStyle(n.type);
+        style = `${base}, highlight marker`;
+      }
       lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {};`);
+    }
+
+    if (hasAnnotation(n, "probe")) {
+      lines.push(`  \\draw[probe marker] (n${n.id}) circle (5pt);`);
     }
   }
 
@@ -128,9 +159,23 @@ export function generateTikz(
     const srcIsDummy = fromNode.isDummy === true;
     const dstIsDummy = toNode.isDummy === true;
 
+    // Determine if this edge should use dead style.
+    // For dummy nodes, check the original edge endpoints.
+    function resolveDeadStatus(n: LayoutNode): boolean {
+      if (hasAnnotation(n, "dead")) return true;
+      if (n.isDummy && n.dummyEdge) {
+        const orig = nodeMap.get(n.dummyEdge.from);
+        const dest = nodeMap.get(n.dummyEdge.to);
+        if ((orig && hasAnnotation(orig, "dead")) || (dest && hasAnnotation(dest, "dead"))) return true;
+      }
+      return false;
+    }
+    const edgeDead = resolveDeadStatus(fromNode) || resolveDeadStatus(toNode);
+    const drawCmd = edgeDead ? "\\draw[dead edge]" : "\\draw";
+
     // dummy → dummy: straight through
     if (srcIsDummy && dstIsDummy) {
-      lines.push(`  \\draw (n${e.from}.south) -- (n${e.to}.north);`);
+      lines.push(`  ${drawCmd} (n${e.from}.south) -- (n${e.to}.north);`);
       continue;
     }
 
@@ -161,17 +206,17 @@ export function generateTikz(
     if (!srcIsDummy && !dstIsDummy) {
       // non-dummy → non-dummy: angular departure + diagonal + angular arrival
       lines.push(
-        `  \\draw ${depAnchor} -- ${depStem} -- ${arrStem} -- ${arrAnchor};`
+        `  ${drawCmd} ${depAnchor} -- ${depStem} -- ${arrStem} -- ${arrAnchor};`
       );
     } else if (!srcIsDummy) {
       // non-dummy → dummy: angular departure, then to dummy
       lines.push(
-        `  \\draw ${depAnchor} -- ${depStem} -- (n${e.to}.north);`
+        `  ${drawCmd} ${depAnchor} -- ${depStem} -- (n${e.to}.north);`
       );
     } else {
       // dummy → non-dummy: from dummy, angular arrival into target
       lines.push(
-        `  \\draw (n${e.from}.south) -- ${arrStem} -- ${arrAnchor};`
+        `  ${drawCmd} (n${e.from}.south) -- ${arrStem} -- ${arrAnchor};`
       );
     }
   }
@@ -180,6 +225,10 @@ export function generateTikz(
   lines.push("\\end{tikzpicture}");
 
   return lines.join("\n");
+}
+
+function hasAnnotation(n: LayoutNode, tag: string): boolean {
+  return n.annotations?.includes(tag) === true;
 }
 
 function nodeStyle(type: string): string {

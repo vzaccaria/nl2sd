@@ -15,8 +15,18 @@ export function parseNetlist(content: string): NetlistNode[] {
     const commentIdx = trimmed.indexOf("#");
     const codePart =
       commentIdx >= 0 ? trimmed.substring(0, commentIdx).trim() : trimmed;
-    const comment =
+    let comment =
       commentIdx >= 0 ? trimmed.substring(commentIdx + 1).trim() : undefined;
+
+    // Extract @annotations from comment
+    let annotations: string[] | undefined;
+    if (comment) {
+      const matches = comment.match(/@(probe|dead|fresh|highlight)/g);
+      if (matches) {
+        annotations = matches.map((m) => m.substring(1));
+        comment = comment.replace(/@(probe|dead|fresh|highlight)/g, "").trim() || undefined;
+      }
+    }
 
     const tokens = codePart.split(/\s+/);
     if (tokens.length === 0 || !tokens[0]) continue;
@@ -27,7 +37,7 @@ export function parseNetlist(content: string): NetlistNode[] {
       // in <wire_id> <port>
       const id = parseInt(tokens[1], 10);
       const port = tokens[2];
-      nodes.push({ id, type: "in", inputs: [], port, comment });
+      nodes.push({ id, type: "in", inputs: [], port, comment, annotations });
     } else if (op === "out") {
       // out <source_id> <port>
       const sourceId = parseInt(tokens[1], 10);
@@ -39,11 +49,12 @@ export function parseNetlist(content: string): NetlistNode[] {
         inputs: [sourceId],
         port,
         comment,
+        annotations,
       });
     } else if (op === "ref") {
       // ref <wire_id>
       const id = parseInt(tokens[1], 10);
-      nodes.push({ id, type: "ref", inputs: [], comment });
+      nodes.push({ id, type: "ref", inputs: [], comment, annotations });
     } else if (op === "reg") {
       // reg <source_id> [port]
       const sourceId = parseInt(tokens[1], 10);
@@ -55,18 +66,19 @@ export function parseNetlist(content: string): NetlistNode[] {
         inputs: [sourceId],
         port,
         comment,
+        annotations,
       });
     } else if (BINARY_OPS.has(op)) {
       // and/xor/xnor/nand/nor <src1> <src2>
       const src1 = parseInt(tokens[1], 10);
       const src2 = parseInt(tokens[2], 10);
       const id = nodes.length;
-      nodes.push({ id, type: op, inputs: [src1, src2], comment });
+      nodes.push({ id, type: op, inputs: [src1, src2], comment, annotations });
     } else if (UNARY_OPS.has(op)) {
       // not <src>
       const src = parseInt(tokens[1], 10);
       const id = nodes.length;
-      nodes.push({ id, type: op, inputs: [src], comment });
+      nodes.push({ id, type: op, inputs: [src], comment, annotations });
     }
   }
 
