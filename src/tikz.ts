@@ -75,23 +75,21 @@ export function generateTikz(
     const isFresh = hasAnnotation(n, "fresh");
     const isHighlight = hasAnnotation(n, "highlight");
 
-    if (n.type === "in" || n.type === "out") {
+    if (isFresh) {
+      // Fresh randoms render as black filled circles (like ref nodes)
+      style = "ref node";
+      lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {};`);
+    } else if (n.type === "in" || n.type === "out") {
       if (isDead) {
         style = "dead label";
       } else if (isHighlight) {
         style = "io label, fill=yellow!40, rounded corners, inner sep=2pt";
-      } else if (isFresh) {
-        style = "io label, text=blue!70";
       }
       const label = n.comment || n.port || `${n.type}${n.id}`;
       lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {${formatLabel(label)}};`);
     } else {
       if (isDead) {
         style = "dead node";
-      } else if (isFresh) {
-        // Keep shape size from base style, override fill/draw
-        const base = nodeStyle(n.type);
-        style = `${base}, fresh marker`;
       } else if (isHighlight) {
         const base = nodeStyle(n.type);
         style = `${base}, highlight marker`;
