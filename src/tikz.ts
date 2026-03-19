@@ -54,6 +54,45 @@ export function generateTikz(
   lines.push("]");
   lines.push("");
 
+  // Precompute dead status for copy/dummy nodes.
+  // A copy node is dead if its source is dead OR all its consumers are dead.
+  const deadNodes = new Set<number>();
+  // Seed: all non-copy/non-dummy nodes that have @dead
+  for (const n of layoutNodes) {
+    if (!n.isCopyNode && !n.isDummy && hasAnnotation(n, "dead")) {
+      deadNodes.add(n.id);
+    }
+  }
+  // Build outgoing edges per node
+  const outEdges = new Map<number, number[]>();
+  for (const n of layoutNodes) outEdges.set(n.id, []);
+  for (const e of edges) outEdges.get(e.from)?.push(e.to);
+  // Fixpoint: mark copy/dummy nodes dead if source is dead or ALL consumers dead
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const n of layoutNodes) {
+      if (deadNodes.has(n.id)) continue;
+      if (!n.isCopyNode && !n.isDummy) continue;
+      // Dead if source is dead
+      let src: LayoutNode | undefined = n;
+      while (src && (src.isCopyNode || src.isDummy) && src.inputs.length > 0) {
+        src = nodeMap.get(src.inputs[0]);
+      }
+      if (src && deadNodes.has(src.id)) {
+        deadNodes.add(n.id);
+        changed = true;
+        continue;
+      }
+      // Dead if all consumers are dead
+      const consumers = outEdges.get(n.id) || [];
+      if (consumers.length > 0 && consumers.every((c) => deadNodes.has(c))) {
+        deadNodes.add(n.id);
+        changed = true;
+      }
+    }
+  }
+
   // Place nodes
   for (const n of layoutNodes) {
     const xPos = posX.get(n.id)!;
@@ -66,7 +105,7 @@ export function generateTikz(
     }
 
     if (n.isCopyNode) {
-      lines.push(`  \\node[copy node] (n${n.id}) at ${pos} {};`);
+      lines.push(`  \\node[${deadNodes.has(n.id) ? "dead node" : "copy node"}] (n${n.id}) at ${pos} {};`);
       continue;
     }
 
@@ -157,18 +196,9 @@ export function generateTikz(
     const srcIsDummy = fromNode.isDummy === true;
     const dstIsDummy = toNode.isDummy === true;
 
-    // Determine if this edge should use dead style.
-    // For dummy nodes, check the original edge endpoints.
-    function resolveDeadStatus(n: LayoutNode): boolean {
-      if (hasAnnotation(n, "dead")) return true;
-      if (n.isDummy && n.dummyEdge) {
-        const orig = nodeMap.get(n.dummyEdge.from);
-        const dest = nodeMap.get(n.dummyEdge.to);
-        if ((orig && hasAnnotation(orig, "dead")) || (dest && hasAnnotation(dest, "dead"))) return true;
-      }
-      return false;
-    }
-    const edgeDead = resolveDeadStatus(fromNode) || resolveDeadStatus(toNode);
+    // Determine if this edge should use dead style using precomputed set
+    const edgeDead = deadNodes.has(fromNode.id) || deadNodes.has(toNode.id)
+      || hasAnnotation(fromNode, "dead") || hasAnnotation(toNode, "dead");
     const drawCmd = edgeDead ? "\\draw[dead edge]" : "\\draw";
 
     // dummy → dummy: straight through
