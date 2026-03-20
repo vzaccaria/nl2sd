@@ -41,11 +41,11 @@ export function generateTikz(
   lines.push("  nor gate/.style={circle, fill=gray!40, draw=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  not gate/.style={circle, fill=white, draw=black, inner sep=0pt, minimum size=5pt},");
   lines.push("  ref node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
-  lines.push("  reg node/.style={rectangle, fill=white, draw=black, inner sep=0pt, minimum size=6pt},");
+  lines.push("  reg node/.style={rectangle, fill=black, draw=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  copy node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  dummy node/.style={inner sep=0pt, minimum size=0pt, coordinate},");
   lines.push("  io label/.style={font=\\footnotesize},");
-  lines.push("  probe marker/.style={draw=blue!80, line width=0.8pt},");
+  lines.push("  probe marker/.style={circle, fill=red, inner sep=0pt, minimum size=4pt, anchor=center},");
   lines.push("  dead node/.style={draw=gray!50, dashed, fill=gray!10, text=gray!50},");
   lines.push("  dead edge/.style={draw=gray!40, dashed},");
   lines.push("  dead label/.style={font=\\footnotesize, text=gray!50},");
@@ -137,7 +137,7 @@ export function generateTikz(
     }
 
     if (hasAnnotation(n, "probe")) {
-      lines.push(`  \\draw[probe marker] (n${n.id}) circle (5pt);`);
+      lines.push(`  \\node[probe marker] at (n${n.id}) {};`);
     }
   }
 
@@ -295,6 +295,20 @@ function formatLabel(s: string): string {
   const bracketMatch = s.match(/^([A-Za-z]+)\[(\w+)\]$/);
   if (bracketMatch) {
     return `$${bracketMatch[1]}_{${bracketMatch[2]}}$`;
+  }
+  // Detect letter+digit with optional prime: e.g. a1, b02, a0'
+  const letterDigit = s.match(/^([A-Za-z])(\d+)('?)$/);
+  if (letterDigit) {
+    const base = `${letterDigit[1]}_{${letterDigit[2]}}`;
+    if (letterDigit[3] === "'") {
+      return `$\\overline{${base}}$`;
+    }
+    return `$${base}$`;
+  }
+  // Detect share annotations used as labels: e.g. 0_0, 1_2
+  const shareMatch = s.match(/^(\d+)_(\d+)$/);
+  if (shareMatch) {
+    return `$o_{${shareMatch[1]},${shareMatch[2]}}$`;
   }
   // Plain text: escape LaTeX specials
   return s

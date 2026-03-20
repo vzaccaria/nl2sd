@@ -173,6 +173,15 @@ export function assignLayers(
     }
   }
 
+  // Align all reg nodes on the same layer (the deepest among them)
+  const regNodes = layoutNodes.filter((n) => n.type === "reg");
+  if (regNodes.length > 0) {
+    const maxRegLayer = Math.max(...regNodes.map((n) => n.layer));
+    for (const n of regNodes) {
+      n.layer = maxRegLayer;
+    }
+  }
+
   // Push all out nodes to maxLayer
   const maxGateLayer = Math.max(
     ...layoutNodes.filter((n) => n.type !== "out").map((n) => n.layer)
