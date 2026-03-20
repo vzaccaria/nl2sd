@@ -71,6 +71,9 @@ export function layoutGraph(
     if (layerIdx === 0) {
       // Keep original ID order for inputs
       nodesInLayer.sort((a, b) => a.id - b.id);
+    } else if (layerIdx === maxLayer) {
+      // Sort outputs by port (share info) for stable ordering across steps
+      nodesInLayer.sort((a, b) => (a.port ?? "").localeCompare(b.port ?? "") || a.id - b.id);
     } else {
       nodesInLayer.sort((a, b) => a.x - b.x);
     }

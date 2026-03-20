@@ -118,6 +118,12 @@ export function generateTikz(
       // Fresh randoms render as black filled circles (like ref nodes)
       style = "ref node";
       lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {};`);
+    } else if (n.type === "ref" && n.comment) {
+      // Named randoms: show label above the node
+      if (isDead) style = "dead node";
+      lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {};`);
+      const labelStyle = isDead ? "dead label" : "io label";
+      lines.push(`  \\node[${labelStyle}, above=2pt] at (n${n.id}) {${formatLabel(n.comment)}};`);
     } else if (n.type === "in" || n.type === "out") {
       if (isDead) {
         style = "dead label";
