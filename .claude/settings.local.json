@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx ts-node:*)",
       "Bash(npx tsc:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm run:*)",
+      "Bash(node dist/index.js tests/ISW_mult/2shares.nl --ascii)",
+      "Bash(node dist/index.js tests/dom/dom1.nl)"
     ]
   },
   "enableAllProjectMcpServers": true,

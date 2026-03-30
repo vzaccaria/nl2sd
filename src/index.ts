@@ -5,10 +5,12 @@ import * as os from "os";
 import * as path from "path";
 import { execSync } from "child_process";
 import { Command } from "commander";
+import { LayoutNode, Edge } from "./types";
 import { parseNetlist } from "./parser";
 import { buildGraph, assignLayers, insertDummyNodes } from "./graph";
 import { layoutGraph } from "./layout";
 import { generateTikz } from "./tikz";
+import { generateAscii } from "./ascii";
 
 function wrapTikzStandalone(tikz: string): string {
   return `\\documentclass[border=5pt]{standalone}
@@ -78,14 +80,14 @@ function compilePng(
   }
 }
 
-function pipeline(inputFile: string): string {
+function pipeline(inputFile: string): { layoutNodes: LayoutNode[]; edges: Edge[] } {
   const content = fs.readFileSync(inputFile, "utf-8");
   const nodes = parseNetlist(content);
   let { layoutNodes, edges } = buildGraph(nodes);
   assignLayers(layoutNodes, edges);
   ({ layoutNodes, edges } = insertDummyNodes(layoutNodes, edges));
   layoutGraph(layoutNodes, edges);
-  return generateTikz(layoutNodes, edges);
+  return { layoutNodes, edges };
 }
 
 const program = new Command();
@@ -96,25 +98,39 @@ program
   .argument("<file>", "path to .nl netlist file")
   .option("--pdf", "generate PDF output (requires pdflatex)")
   .option("--png", "generate high-quality PNG output (requires pdflatex + pdftoppm)")
+  .option("--ascii", "generate ASCII diagram to stdout")
   .option("--dpi <number>", "PNG resolution in DPI", "300")
   .option("-o, --output <file>", "output file path (default: derived from input name)")
-  .action((file: string, opts: { pdf?: boolean; png?: boolean; dpi: string; output?: string }) => {
-    const tikz = pipeline(file);
+  .action((file: string, opts: { pdf?: boolean; png?: boolean; ascii?: boolean; dpi: string; output?: string }) => {
+    const { layoutNodes, edges } = pipeline(file);
     const baseName = path.basename(file, path.extname(file));
     const dir = path.dirname(file);
     const dpi = parseInt(opts.dpi, 10);
 
-    if (opts.pdf) {
+    if (opts.ascii) {
+      const ascii = generateAscii(layoutNodes, edges);
+      if (opts.output) {
+        fs.writeFileSync(opts.output, ascii);
+        console.error(`ASCII diagram written to ${opts.output}`);
+      } else {
+        console.log(ascii);
+      }
+    } else if (opts.pdf) {
+      const tikz = generateTikz(layoutNodes, edges);
       const out = opts.output || path.join(dir, `${baseName}.pdf`);
       compilePdf(wrapTikzStandalone(tikz), out);
     } else if (opts.png) {
+      const tikz = generateTikz(layoutNodes, edges);
       const out = opts.output || path.join(dir, `${baseName}.png`);
       compilePng(wrapTikzStandalone(tikz), out, dpi);
-    } else if (opts.output) {
-      fs.writeFileSync(opts.output, tikz);
-      console.error(`TikZ written to ${opts.output}`);
     } else {
-      console.log(tikz);
+      const tikz = generateTikz(layoutNodes, edges);
+      if (opts.output) {
+        fs.writeFileSync(opts.output, tikz);
+        console.error(`TikZ written to ${opts.output}`);
+      } else {
+        console.log(tikz);
+      }
     }
   });
 
