@@ -131,13 +131,20 @@ export function generateTikz(
       const labelStyle = isDead ? "dead label" : "io label";
       lines.push(`  \\node[${labelStyle}, above=2pt] at (n${n.id}) {${formatLabel(n.comment)}};`);
     } else if (n.type === "in" || n.type === "out") {
-      if (isDead) {
-        style = "dead label";
-      } else if (isHighlight) {
-        style = "io label, fill=yellow!40, rounded corners, inner sep=2pt";
+      const isErase = hasAnnotation(n, "erase");
+      if (n.type === "out" && isErase && !isDead) {
+        // Erase morphism (ZIACR23 cut rule): wire ends in a filled bullet,
+        // no text label.
+        lines.push(`  \\node[ref node] (n${n.id}) at ${pos} {};`);
+      } else {
+        if (isDead) {
+          style = "dead label";
+        } else if (isHighlight) {
+          style = "io label, fill=yellow!40, rounded corners, inner sep=2pt";
+        }
+        const label = n.comment || n.port || `${n.type}${n.id}`;
+        lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {${formatLabel(label)}};`);
       }
-      const label = n.comment || n.port || `${n.type}${n.id}`;
-      lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {${formatLabel(label)}};`);
     } else {
       if (isDead) {
         style = "dead node";
@@ -154,7 +161,7 @@ export function generateTikz(
         `  \\draw[probe arrow, draw=${probeColor}] ([shift={(-0.24cm,-0.24cm)}]n${n.id}.center) -- ([shift={(-0.05cm,-0.05cm)}]n${n.id}.center);`
       );
     }
-    if (hasAnnotation(n, "erase")) {
+    if (hasAnnotation(n, "erase") && n.type !== "out") {
       lines.push(`  \\node[dead label, above=7pt] at (n${n.id}) {$!$};`);
     }
   }

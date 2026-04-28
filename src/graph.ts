@@ -175,12 +175,21 @@ export function assignLayers(
 
 
 
-  // Push all out nodes to maxLayer
+  // Push all out nodes to maxLayer, except @erase outs that terminate a
+  // wire from an in/ref directly (mid-circuit bullet, as in ZIACR23 Fig 2
+  // panels c/d after the cut rule has propagated upward).
   const maxGateLayer = Math.max(
     ...layoutNodes.filter((n) => n.type !== "out").map((n) => n.layer)
   );
+  const isInlineEraseOut = (n: LayoutNode): boolean => {
+    if (n.type !== "out") return false;
+    if (!n.annotations?.includes("erase")) return false;
+    if (n.inputs.length === 0) return false;
+    const src = nodeMap.get(n.inputs[0]);
+    return !!src && (src.type === "in" || src.type === "ref");
+  };
   for (const n of layoutNodes) {
-    if (n.type === "out") {
+    if (n.type === "out" && !isInlineEraseOut(n)) {
       n.layer = maxGateLayer + 1;
     }
   }
