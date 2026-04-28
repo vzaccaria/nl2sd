@@ -15,6 +15,7 @@ import { generateAscii } from "./ascii";
 function wrapTikzStandalone(tikz: string): string {
   return `\\documentclass[border=5pt]{standalone}
 \\usepackage{tikz}
+\\usetikzlibrary{arrows.meta}
 \\begin{document}
 ${tikz}
 \\end{document}
@@ -36,7 +37,15 @@ function combineTikzPanels(
 
   const separator = `@{\\hspace{${gap}}}`;
   const columnSpec = `@{}${Array(panels.length).fill("c").join(separator)}@{}`;
-  const rows = [`\\begin{tabular}{${columnSpec}}`, panels.join(" & ")];
+  // Force each tikzpicture's baseline to its bounding-box NORTH so the
+  // tabular row aligns panels at their top edges instead of at tikz origin.
+  const topAlignedPanels = panels.map((p) =>
+    p.replace(
+      /\\begin\{tikzpicture\}\[/,
+      "\\begin{tikzpicture}[baseline={(current bounding box.north)},"
+    )
+  );
+  const rows = [`\\begin{tabular}{${columnSpec}}`, topAlignedPanels.join(" & ")];
 
   if (labels.length > 0) {
     const paddedLabels = panels.map((_, i) => labels[i] || "");
@@ -162,6 +171,22 @@ program
     const dpi = parseInt(opts.dpi, 10);
     const probeColor = opts.probeColor || "red";
     const labels = panelLabels(files.length, opts.panelLabels);
+    // Cross-panel output alignment: pick the deepest output y across all
+    // diagrams, so each panel's regular outs render on the same row.
+    const LAYER_SEP = 1.2;
+    let outYOverride: number | undefined;
+    if (diagrams.length > 1) {
+      let maxLayer = 0;
+      for (const d of diagrams) {
+        for (const n of d.layoutNodes) {
+          if (n.type === "out" && !n.annotations?.includes("erase") && n.layer > maxLayer) {
+            maxLayer = n.layer;
+          }
+        }
+      }
+      outYOverride = -maxLayer * LAYER_SEP;
+    }
+    const tikzOpts = { defaultProbeColor: probeColor, outYOverride };
 
     if (opts.ascii) {
       const ascii = diagrams
@@ -175,21 +200,21 @@ program
       }
     } else if (opts.pdf) {
       const panels = diagrams.map((diagram) =>
-        generateTikz(diagram.layoutNodes, diagram.edges, { defaultProbeColor: probeColor })
+        generateTikz(diagram.layoutNodes, diagram.edges, tikzOpts)
       );
       const outName = files.length === 1 ? `${baseName}.pdf` : `${baseName}-panels.pdf`;
       const out = opts.output || path.join(dir, outName);
       compilePdf(wrapTikzStandalone(combineTikzPanels(panels, labels, opts.panelGap)), out);
     } else if (opts.png) {
       const panels = diagrams.map((diagram) =>
-        generateTikz(diagram.layoutNodes, diagram.edges, { defaultProbeColor: probeColor })
+        generateTikz(diagram.layoutNodes, diagram.edges, tikzOpts)
       );
       const outName = files.length === 1 ? `${baseName}.png` : `${baseName}-panels.png`;
       const out = opts.output || path.join(dir, outName);
       compilePng(wrapTikzStandalone(combineTikzPanels(panels, labels, opts.panelGap)), out, dpi);
     } else {
       const panels = diagrams.map((diagram) =>
-        generateTikz(diagram.layoutNodes, diagram.edges, { defaultProbeColor: probeColor })
+        generateTikz(diagram.layoutNodes, diagram.edges, tikzOpts)
       );
       const tikz = combineTikzPanels(panels, labels, opts.panelGap);
       if (opts.output) {

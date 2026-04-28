@@ -6,6 +6,9 @@ const STEM = 0.3; // length of vertical stem departing a node
 
 export interface TikzOptions {
   defaultProbeColor?: string;
+  /** If set, force regular (non-erase) output nodes to this y coordinate
+   *  so outputs align across multi-panel figures of unequal depth. */
+  outYOverride?: number;
 }
 
 export function generateTikz(
@@ -34,6 +37,34 @@ export function generateTikz(
     posX.set(n.id, xPos);
     posY.set(n.id, yPos);
   }
+  // Visual fix for shallow diagrams (e.g. ZIACR23 Fig 2 panel d): when
+  // regular output labels share their layer with inline-erase bullets
+  // (i.e. terminations of in/ref wires), drop the labels half a layer
+  // so they sit visibly below the bullet row.
+  const layersWithInlineErase = new Set<number>();
+  for (const n of layoutNodes) {
+    if (n.type !== "out" || !hasAnnotation(n, "erase")) continue;
+    if (!n.inputs || n.inputs.length === 0) continue;
+    const src = nodeMap.get(n.inputs[0]);
+    if (src && (src.type === "in" || src.type === "ref")) {
+      layersWithInlineErase.add(n.layer);
+    }
+  }
+  for (const n of layoutNodes) {
+    if (n.type === "out" && !hasAnnotation(n, "erase") && layersWithInlineErase.has(n.layer)) {
+      posY.set(n.id, posY.get(n.id)! - LAYER_SEP * 0.6);
+    }
+  }
+  // Cross-panel output alignment: override regular out y to a caller-given
+  // value so multi-panel figures share a common output row regardless of
+  // their individual depths.
+  if (opts.outYOverride !== undefined) {
+    for (const n of layoutNodes) {
+      if (n.type === "out" && !hasAnnotation(n, "erase")) {
+        posY.set(n.id, opts.outYOverride);
+      }
+    }
+  }
 
   const lines: string[] = [];
 
@@ -51,7 +82,7 @@ export function generateTikz(
   lines.push("  copy node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  dummy node/.style={inner sep=0pt, minimum size=0pt, coordinate},");
   lines.push("  io label/.style={font=\\footnotesize},");
-  lines.push("  probe arrow/.style={->, >=stealth, line width=0.55pt},");
+  lines.push("  probe arrow/.style={-{Stealth[length=7pt,width=6pt]}, line width=2pt},");
   lines.push("  dead node/.style={draw=gray!50, dashed, fill=gray!10, text=gray!50},");
   lines.push("  dead edge/.style={draw=gray!40, dashed},");
   lines.push("  dead label/.style={font=\\footnotesize, text=gray!50},");
@@ -158,7 +189,7 @@ export function generateTikz(
     if (hasProbeAnnotation(n)) {
       const probeColor = probeColorOf(n, defaultProbeColor);
       lines.push(
-        `  \\draw[probe arrow, draw=${probeColor}] ([shift={(-0.24cm,-0.24cm)}]n${n.id}.center) -- ([shift={(-0.05cm,-0.05cm)}]n${n.id}.center);`
+        `  \\draw[probe arrow, draw=${probeColor}] ([shift={(-0.85cm,-0.85cm)}]n${n.id}.center) -- ([shift={(-0.18cm,-0.18cm)}]n${n.id}.center);`
       );
     }
     if (hasAnnotation(n, "erase") && n.type !== "out") {
