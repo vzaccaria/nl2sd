@@ -2,7 +2,7 @@ import { GateType, NetlistNode } from "./types";
 
 const BINARY_OPS = new Set<GateType>(["and", "xor", "xnor", "nand", "nor"]);
 const UNARY_OPS = new Set<GateType>(["not"]);
-const ANNO_RE = /@(probe(?:[:=][A-Za-z0-9!._-]+)?|dead|fresh|highlight)\b/g;
+const ANNO_RE = /@(probe(?:[:=][A-Za-z0-9!._-]+)?|dead|fresh|highlight|erase)\b/g;
 
 function normaliseAnnotation(raw: string): string {
   // Accept both @probe:red and @probe=red, normalise to probe:red.

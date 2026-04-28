@@ -154,6 +154,9 @@ export function generateTikz(
         `  \\draw[probe arrow, draw=${probeColor}] ([shift={(-0.24cm,-0.24cm)}]n${n.id}.center) -- ([shift={(-0.05cm,-0.05cm)}]n${n.id}.center);`
       );
     }
+    if (hasAnnotation(n, "erase")) {
+      lines.push(`  \\node[dead label, above=7pt] at (n${n.id}) {$!$};`);
+    }
   }
 
   lines.push("");

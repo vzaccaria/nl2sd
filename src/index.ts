@@ -21,6 +21,56 @@ ${tikz}
 `;
 }
 
+function escapeLatexText(s: string): string {
+  return s
+    .replace(/\\/g, "\\textbackslash{}")
+    .replace(/[&%$#_{}~^]/g, (m) => "\\" + m);
+}
+
+function combineTikzPanels(
+  panels: string[],
+  labels: string[],
+  gap: string
+): string {
+  if (panels.length === 1) return panels[0];
+
+  const separator = `@{\\hspace{${gap}}}`;
+  const columnSpec = `@{}${Array(panels.length).fill("c").join(separator)}@{}`;
+  const rows = [`\\begin{tabular}{${columnSpec}}`, panels.join(" & ")];
+
+  if (labels.length > 0) {
+    const paddedLabels = panels.map((_, i) => labels[i] || "");
+    rows.push("\\\\[0.35em]");
+    rows.push(
+      paddedLabels
+        .map((label) => label ? `{\\footnotesize ${escapeLatexText(label)}}` : "")
+        .join(" & ")
+    );
+  }
+
+  rows.push("\\end{tabular}");
+  return rows.join("\n");
+}
+
+function panelLetter(index: number): string {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz";
+  if (index < alphabet.length) return alphabet[index];
+  return `${index + 1}`;
+}
+
+function panelLabels(count: number, labelsCsv?: string): string[] {
+  if (count <= 1) return [];
+
+  const labels = labelsCsv
+    ? labelsCsv.split(",").map((s) => s.trim())
+    : [];
+
+  return Array.from({ length: count }, (_, i) => {
+    const prefix = `(${panelLetter(i)})`;
+    return labels[i] ? `${prefix} ${labels[i]}` : prefix;
+  });
+}
+
 function compilePdf(texContent: string, outputPath: string): void {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nl2sd-"));
   const texFile = path.join(tmpDir, "diagram.tex");
@@ -95,22 +145,28 @@ const program = new Command();
 program
   .name("nl2sd")
   .description("Convert netlist (.nl) files to signal-flow TikZ diagrams")
-  .argument("<file>", "path to .nl netlist file")
+  .argument("<files...>", "path(s) to .nl netlist file(s)")
   .option("--pdf", "generate PDF output (requires pdflatex)")
   .option("--png", "generate high-quality PNG output (requires pdflatex + pdftoppm)")
   .option("--ascii", "generate ASCII diagram to stdout")
   .option("--dpi <number>", "PNG resolution in DPI", "300")
   .option("--probe-color <latex-color>", "default color for @probe markers", "red")
+  .option("--panel-labels <csv>", "comma-separated labels for multi-file side-by-side panels")
+  .option("--panel-gap <latex-length>", "horizontal gap between multi-file panels", "1.2cm")
   .option("-o, --output <file>", "output file path (default: derived from input name)")
-  .action((file: string, opts: { pdf?: boolean; png?: boolean; ascii?: boolean; dpi: string; output?: string; probeColor?: string }) => {
-    const { layoutNodes, edges } = pipeline(file);
-    const baseName = path.basename(file, path.extname(file));
-    const dir = path.dirname(file);
+  .action((files: string[], opts: { pdf?: boolean; png?: boolean; ascii?: boolean; dpi: string; output?: string; probeColor?: string; panelLabels?: string; panelGap: string }) => {
+    const diagrams = files.map((file) => ({ file, ...pipeline(file) }));
+    const firstFile = files[0];
+    const baseName = path.basename(firstFile, path.extname(firstFile));
+    const dir = path.dirname(firstFile);
     const dpi = parseInt(opts.dpi, 10);
     const probeColor = opts.probeColor || "red";
+    const labels = panelLabels(files.length, opts.panelLabels);
 
     if (opts.ascii) {
-      const ascii = generateAscii(layoutNodes, edges);
+      const ascii = diagrams
+        .map((diagram) => generateAscii(diagram.layoutNodes, diagram.edges))
+        .join("\n\n---\n\n");
       if (opts.output) {
         fs.writeFileSync(opts.output, ascii);
         console.error(`ASCII diagram written to ${opts.output}`);
@@ -118,15 +174,24 @@ program
         console.log(ascii);
       }
     } else if (opts.pdf) {
-      const tikz = generateTikz(layoutNodes, edges, { defaultProbeColor: probeColor });
-      const out = opts.output || path.join(dir, `${baseName}.pdf`);
-      compilePdf(wrapTikzStandalone(tikz), out);
+      const panels = diagrams.map((diagram) =>
+        generateTikz(diagram.layoutNodes, diagram.edges, { defaultProbeColor: probeColor })
+      );
+      const outName = files.length === 1 ? `${baseName}.pdf` : `${baseName}-panels.pdf`;
+      const out = opts.output || path.join(dir, outName);
+      compilePdf(wrapTikzStandalone(combineTikzPanels(panels, labels, opts.panelGap)), out);
     } else if (opts.png) {
-      const tikz = generateTikz(layoutNodes, edges, { defaultProbeColor: probeColor });
-      const out = opts.output || path.join(dir, `${baseName}.png`);
-      compilePng(wrapTikzStandalone(tikz), out, dpi);
+      const panels = diagrams.map((diagram) =>
+        generateTikz(diagram.layoutNodes, diagram.edges, { defaultProbeColor: probeColor })
+      );
+      const outName = files.length === 1 ? `${baseName}.png` : `${baseName}-panels.png`;
+      const out = opts.output || path.join(dir, outName);
+      compilePng(wrapTikzStandalone(combineTikzPanels(panels, labels, opts.panelGap)), out, dpi);
     } else {
-      const tikz = generateTikz(layoutNodes, edges, { defaultProbeColor: probeColor });
+      const panels = diagrams.map((diagram) =>
+        generateTikz(diagram.layoutNodes, diagram.edges, { defaultProbeColor: probeColor })
+      );
+      const tikz = combineTikzPanels(panels, labels, opts.panelGap);
       if (opts.output) {
         fs.writeFileSync(opts.output, tikz);
         console.error(`TikZ written to ${opts.output}`);
