@@ -4,10 +4,16 @@ const LAYER_SEP = 1.2; // vertical distance between layers
 const NODE_SEP = 1.0; // horizontal distance between nodes
 const STEM = 0.3; // length of vertical stem departing a node
 
+export interface TikzOptions {
+  defaultProbeColor?: string;
+}
+
 export function generateTikz(
   layoutNodes: LayoutNode[],
-  edges: Edge[]
+  edges: Edge[],
+  opts: TikzOptions = {}
 ): string {
+  const defaultProbeColor = opts.defaultProbeColor || "red";
   const nodeMap = new Map<number, LayoutNode>();
   for (const n of layoutNodes) {
     nodeMap.set(n.id, n);
@@ -45,7 +51,7 @@ export function generateTikz(
   lines.push("  copy node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  dummy node/.style={inner sep=0pt, minimum size=0pt, coordinate},");
   lines.push("  io label/.style={font=\\footnotesize},");
-  lines.push("  probe marker/.style={circle, fill=red, inner sep=0pt, minimum size=4pt, anchor=center},");
+  lines.push("  probe arrow/.style={->, >=stealth, line width=0.55pt},");
   lines.push("  dead node/.style={draw=gray!50, dashed, fill=gray!10, text=gray!50},");
   lines.push("  dead edge/.style={draw=gray!40, dashed},");
   lines.push("  dead label/.style={font=\\footnotesize, text=gray!50},");
@@ -142,8 +148,11 @@ export function generateTikz(
       lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {};`);
     }
 
-    if (hasAnnotation(n, "probe")) {
-      lines.push(`  \\node[probe marker] at (n${n.id}) {};`);
+    if (hasProbeAnnotation(n)) {
+      const probeColor = probeColorOf(n, defaultProbeColor);
+      lines.push(
+        `  \\draw[probe arrow, draw=${probeColor}] ([shift={(-0.24cm,-0.24cm)}]n${n.id}.center) -- ([shift={(-0.05cm,-0.05cm)}]n${n.id}.center);`
+      );
     }
   }
 
@@ -263,6 +272,21 @@ export function generateTikz(
 
 function hasAnnotation(n: LayoutNode, tag: string): boolean {
   return n.annotations?.includes(tag) === true;
+}
+
+function hasProbeAnnotation(n: LayoutNode): boolean {
+  if (!n.annotations) return false;
+  return n.annotations.some((a) => a === "probe" || a.startsWith("probe:"));
+}
+
+function probeColorOf(n: LayoutNode, fallback: string): string {
+  if (!n.annotations) return fallback;
+  const colored = n.annotations.find((a) => a.startsWith("probe:"));
+  if (colored) {
+    const value = colored.substring("probe:".length).trim();
+    if (value.length > 0) return value;
+  }
+  return fallback;
 }
 
 function nodeStyle(type: string): string {

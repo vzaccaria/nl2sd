@@ -100,12 +100,14 @@ program
   .option("--png", "generate high-quality PNG output (requires pdflatex + pdftoppm)")
   .option("--ascii", "generate ASCII diagram to stdout")
   .option("--dpi <number>", "PNG resolution in DPI", "300")
+  .option("--probe-color <latex-color>", "default color for @probe markers", "red")
   .option("-o, --output <file>", "output file path (default: derived from input name)")
-  .action((file: string, opts: { pdf?: boolean; png?: boolean; ascii?: boolean; dpi: string; output?: string }) => {
+  .action((file: string, opts: { pdf?: boolean; png?: boolean; ascii?: boolean; dpi: string; output?: string; probeColor?: string }) => {
     const { layoutNodes, edges } = pipeline(file);
     const baseName = path.basename(file, path.extname(file));
     const dir = path.dirname(file);
     const dpi = parseInt(opts.dpi, 10);
+    const probeColor = opts.probeColor || "red";
 
     if (opts.ascii) {
       const ascii = generateAscii(layoutNodes, edges);
@@ -116,15 +118,15 @@ program
         console.log(ascii);
       }
     } else if (opts.pdf) {
-      const tikz = generateTikz(layoutNodes, edges);
+      const tikz = generateTikz(layoutNodes, edges, { defaultProbeColor: probeColor });
       const out = opts.output || path.join(dir, `${baseName}.pdf`);
       compilePdf(wrapTikzStandalone(tikz), out);
     } else if (opts.png) {
-      const tikz = generateTikz(layoutNodes, edges);
+      const tikz = generateTikz(layoutNodes, edges, { defaultProbeColor: probeColor });
       const out = opts.output || path.join(dir, `${baseName}.png`);
       compilePng(wrapTikzStandalone(tikz), out, dpi);
     } else {
-      const tikz = generateTikz(layoutNodes, edges);
+      const tikz = generateTikz(layoutNodes, edges, { defaultProbeColor: probeColor });
       if (opts.output) {
         fs.writeFileSync(opts.output, tikz);
         console.error(`TikZ written to ${opts.output}`);

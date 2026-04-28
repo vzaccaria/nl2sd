@@ -2,6 +2,15 @@ import { GateType, NetlistNode } from "./types";
 
 const BINARY_OPS = new Set<GateType>(["and", "xor", "xnor", "nand", "nor"]);
 const UNARY_OPS = new Set<GateType>(["not"]);
+const ANNO_RE = /@(probe(?:[:=][A-Za-z0-9!._-]+)?|dead|fresh|highlight)\b/g;
+
+function normaliseAnnotation(raw: string): string {
+  // Accept both @probe:red and @probe=red, normalise to probe:red.
+  if (raw.startsWith("probe=")) {
+    return `probe:${raw.substring("probe=".length)}`;
+  }
+  return raw;
+}
 
 export function parseNetlist(content: string): NetlistNode[] {
   const nodes: NetlistNode[] = [];
@@ -21,10 +30,10 @@ export function parseNetlist(content: string): NetlistNode[] {
     // Extract @annotations from comment
     let annotations: string[] | undefined;
     if (comment) {
-      const matches = comment.match(/@(probe|dead|fresh|highlight)/g);
+      const matches = comment.match(ANNO_RE);
       if (matches) {
-        annotations = matches.map((m) => m.substring(1));
-        comment = comment.replace(/@(probe|dead|fresh|highlight)/g, "").trim() || undefined;
+        annotations = matches.map((m) => normaliseAnnotation(m.substring(1)));
+        comment = comment.replace(ANNO_RE, "").trim() || undefined;
       }
     }
 
