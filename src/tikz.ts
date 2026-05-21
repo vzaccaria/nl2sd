@@ -82,6 +82,8 @@ export function generateTikz(
   lines.push("  copy node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  dummy node/.style={inner sep=0pt, minimum size=0pt, coordinate},");
   lines.push("  io label/.style={font=\\footnotesize},");
+  lines.push("  inner glyph/.style={font=\\scriptsize},");
+  lines.push("  inner glyph invert/.style={font=\\scriptsize, text=white},");
   lines.push("  probe arrow/.style={-{Stealth[length=7pt,width=6pt]}, line width=2pt},");
   lines.push("  dead node/.style={draw=gray!50, dashed, fill=gray!10, text=gray!50},");
   lines.push("  dead edge/.style={draw=gray!40, dashed},");
@@ -183,7 +185,18 @@ export function generateTikz(
         const base = nodeStyle(n.type);
         style = `${base}, highlight marker`;
       }
-      lines.push(`  \\node[${style}] (n${n.id}) at ${pos} {};`);
+      const innerText = n.inner || "";
+      const innerStyle =
+        n.inner && (n.type === "reg" || n.type === "ref")
+          ? ", inner glyph invert"
+          : n.inner
+            ? ", inner glyph"
+            : "";
+      lines.push(`  \\node[${style}${innerStyle}] (n${n.id}) at ${pos} {${innerText}};`);
+      if (n.comment) {
+        const labelStyle = isDead ? "dead label" : "io label";
+        lines.push(`  \\node[${labelStyle}, right=5pt, anchor=west] at (n${n.id}.east) {${formatLabel(n.comment)}};`);
+      }
     }
 
     if (hasProbeAnnotation(n)) {

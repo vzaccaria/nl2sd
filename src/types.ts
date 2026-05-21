@@ -16,6 +16,7 @@ export interface NetlistNode {
   inputs: number[];
   port?: string;
   comment?: string;
+  inner?: string;
   annotations?: string[];
 }
 
