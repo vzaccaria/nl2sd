@@ -9,6 +9,8 @@ export interface TikzOptions {
   /** If set, force regular (non-erase) output nodes to this y coordinate
    *  so outputs align across multi-panel figures of unequal depth. */
   outYOverride?: number;
+  /** Lay out left-to-right (90° CCW rotation) instead of top-to-bottom. */
+  horizontal?: boolean;
 }
 
 export function generateTikz(
@@ -17,6 +19,7 @@ export function generateTikz(
   opts: TikzOptions = {}
 ): string {
   const defaultProbeColor = opts.defaultProbeColor || "red";
+  const horizontal = opts.horizontal === true;
   const nodeMap = new Map<number, LayoutNode>();
   for (const n of layoutNodes) {
     nodeMap.set(n.id, n);
@@ -32,10 +35,16 @@ export function generateTikz(
   const posX = new Map<number, number>();
   const posY = new Map<number, number>();
   for (const n of layoutNodes) {
-    const xPos = (n.x - (layers.get(n.layer)!.length - 1) / 2) * NODE_SEP;
-    const yPos = -n.layer * LAYER_SEP;
-    posX.set(n.id, xPos);
-    posY.set(n.id, yPos);
+    const within = (n.x - (layers.get(n.layer)!.length - 1) / 2) * NODE_SEP;
+    const along = n.layer * LAYER_SEP;
+    if (horizontal) {
+      // 90° CCW rotation of the vertical layout: flow runs left→right.
+      posX.set(n.id, along);
+      posY.set(n.id, within);
+    } else {
+      posX.set(n.id, within);
+      posY.set(n.id, -along);
+    }
   }
   // Visual fix for shallow diagrams (e.g. ZIACR23 Fig 2 panel d): when
   // regular output labels share their layer with inline-erase bullets
@@ -52,7 +61,9 @@ export function generateTikz(
   }
   for (const n of layoutNodes) {
     if (n.type === "out" && !hasAnnotation(n, "erase") && layersWithInlineErase.has(n.layer)) {
-      posY.set(n.id, posY.get(n.id)! - LAYER_SEP * 0.6);
+      // Nudge regular outs half a layer further along the flow axis.
+      if (horizontal) posX.set(n.id, posX.get(n.id)! + LAYER_SEP * 0.6);
+      else posY.set(n.id, posY.get(n.id)! - LAYER_SEP * 0.6);
     }
   }
   // Cross-panel output alignment: override regular out y to a caller-given
@@ -61,7 +72,10 @@ export function generateTikz(
   if (opts.outYOverride !== undefined) {
     for (const n of layoutNodes) {
       if (n.type === "out" && !hasAnnotation(n, "erase")) {
-        posY.set(n.id, opts.outYOverride);
+        // outYOverride is a vertical-flow coordinate; map it onto the flow
+        // axis (positive x) when rotated horizontal.
+        if (horizontal) posX.set(n.id, -opts.outYOverride);
+        else posY.set(n.id, opts.outYOverride);
       }
     }
   }
@@ -230,27 +244,32 @@ export function generateTikz(
     if (!fn.isDummy) outgoingByNode.get(e.from)!.push(e);
     if (!tn.isDummy) incomingByNode.get(e.to)!.push(e);
   }
-  // Sort by partner position so stems don't cross
+  // Sort by partner position along the cross-flow axis so stems don't cross.
+  const crossPos = horizontal ? posY : posX;
   for (const [, el] of outgoingByNode) {
-    el.sort((a, b) => posX.get(a.to)! - posX.get(b.to)!);
+    el.sort((a, b) => crossPos.get(a.to)! - crossPos.get(b.to)!);
   }
   for (const [, el] of incomingByNode) {
-    el.sort((a, b) => posX.get(a.from)! - posX.get(b.from)!);
+    el.sort((a, b) => crossPos.get(a.from)! - crossPos.get(b.from)!);
   }
 
-  const ARR_SPREAD = 90; // angular spread for arrival (upper semicircle)
-  const DEP_SPREAD = 90; // angular spread for departure (lower semicircle)
+  const ARR_SPREAD = 90; // angular spread for arrival
+  const DEP_SPREAD = 90; // angular spread for departure
+  // Semicircle centers follow the flow direction. Vertical: departure points
+  // down (270°), arrival up (90°). Horizontal is the 90° CCW rotation:
+  // departure east (360°), arrival west (180°).
+  const ARR_CENTER = horizontal ? 180 : 90;
+  const DEP_CENTER = horizontal ? 360 : 270;
 
-  // Compute angular anchor on the node boundary.
-  // Arrival anchors spread across 135°..45° (upper semicircle, left to right).
-  // Departure anchors spread across 225°..315° (lower semicircle, left to right).
+  // Compute angular anchor on the node boundary, spreading fan-in/fan-out
+  // across the semicircle centered on the flow direction.
   function arrivalAngle(idx: number, n: number): number {
-    if (n <= 1) return 90;
-    return Math.round(90 + ARR_SPREAD / 2 - idx * ARR_SPREAD / (n - 1));
+    if (n <= 1) return ARR_CENTER;
+    return Math.round(ARR_CENTER + ARR_SPREAD / 2 - idx * ARR_SPREAD / (n - 1));
   }
   function departureAngle(idx: number, n: number): number {
-    if (n <= 1) return 270;
-    return Math.round(270 - DEP_SPREAD / 2 + idx * DEP_SPREAD / (n - 1));
+    if (n <= 1) return DEP_CENTER;
+    return Math.round(DEP_CENTER - DEP_SPREAD / 2 + idx * DEP_SPREAD / (n - 1));
   }
 
   // Draw edges with context-aware routing:

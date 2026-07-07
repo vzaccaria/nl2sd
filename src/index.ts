@@ -162,8 +162,9 @@ program
   .option("--probe-color <latex-color>", "default color for @probe markers", "red")
   .option("--panel-labels <csv>", "comma-separated labels for multi-file side-by-side panels")
   .option("--panel-gap <latex-length>", "horizontal gap between multi-file panels", "1.2cm")
+  .option("--horizontal", "lay out left-to-right instead of top-to-bottom")
   .option("-o, --output <file>", "output file path (default: derived from input name)")
-  .action((files: string[], opts: { pdf?: boolean; png?: boolean; ascii?: boolean; dpi: string; output?: string; probeColor?: string; panelLabels?: string; panelGap: string }) => {
+  .action((files: string[], opts: { pdf?: boolean; png?: boolean; ascii?: boolean; dpi: string; output?: string; probeColor?: string; panelLabels?: string; panelGap: string; horizontal?: boolean }) => {
     const diagrams = files.map((file) => ({ file, ...pipeline(file) }));
     const firstFile = files[0];
     const baseName = path.basename(firstFile, path.extname(firstFile));
@@ -186,7 +187,7 @@ program
       }
       outYOverride = -maxLayer * LAYER_SEP;
     }
-    const tikzOpts = { defaultProbeColor: probeColor, outYOverride };
+    const tikzOpts = { defaultProbeColor: probeColor, outYOverride, horizontal: opts.horizontal === true };
 
     if (opts.ascii) {
       const ascii = diagrams
