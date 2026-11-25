@@ -93,7 +93,7 @@ export function generateTikz(
   lines.push("  not gate/.style={circle, fill=white, draw=black, inner sep=0pt, minimum size=5pt},");
   lines.push("  ref node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
   lines.push("  reg node/.style={rectangle, fill=black, draw=black, inner sep=0pt, minimum size=6pt},");
-  lines.push("  copy node/.style={circle, fill=black, inner sep=0pt, minimum size=6pt},");
+  lines.push("  copy node/.style={circle, fill=black, inner sep=0pt, minimum size=3pt},");
   lines.push("  dummy node/.style={inner sep=0pt, minimum size=0pt, coordinate},");
   lines.push("  io label/.style={font=\\footnotesize},");
   lines.push("  inner glyph/.style={font=\\scriptsize},");
