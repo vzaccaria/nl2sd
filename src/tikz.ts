@@ -215,8 +215,14 @@ export function generateTikz(
 
     if (hasProbeAnnotation(n)) {
       const probeColor = probeColorOf(n, defaultProbeColor);
+      const [probeStart, probeTarget] =
+        n.type === "reg"
+          ? horizontal
+            ? ["(-0.42cm,-0.70cm)", "(0.28cm,0cm)"]
+            : ["(-0.70cm,-0.98cm)", "(0cm,-0.28cm)"]
+          : ["(-0.85cm,-0.85cm)", "(-0.18cm,-0.18cm)"];
       lines.push(
-        `  \\draw[probe arrow, draw=${probeColor}] ([shift={(-0.85cm,-0.85cm)}]n${n.id}.center) -- ([shift={(-0.18cm,-0.18cm)}]n${n.id}.center);`
+        `  \\draw[probe arrow, draw=${probeColor}] ([shift={${probeStart}}]n${n.id}.center) -- ([shift={${probeTarget}}]n${n.id}.center);`
       );
     }
     if (hasAnnotation(n, "erase") && n.type !== "out") {
